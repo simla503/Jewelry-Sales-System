@@ -1,7 +1,5 @@
-from infrastructure.databases.mssql import init_mssql
-from infrastructure.models import todo_model
+from src.infrastructure.databases.mssql import engine, SessionLocal, init_mssql
 
-def init_db(app):
-    init_mssql(app)
-    
-from infrastructure.databases.mssql import Base
+# Alias tiện dụng cho code cũ dùng init_db
+def init_db(app=None):
+    return init_mssql(app)

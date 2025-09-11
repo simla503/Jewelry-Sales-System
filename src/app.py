@@ -1,52 +1,39 @@
-from flask import Flask, jsonify
-from api.swagger import spec
-from api.controllers.todo_controller import bp as todo_bp
-from api.middleware import middleware
-from api.responses import success_response
-from infrastructure.databases import init_db
-from config import Config
+from flask import Flask
 from flasgger import Swagger
-from config import SwaggerConfig
-from flask_swagger_ui import get_swaggerui_blueprint
+from src.infrastructure.databases import init_db
+from src.config import SwaggerConfig
+
+# import middleware nếu có
+try:
+    from src.api.middleware import middleware
+except ImportError:
+    middleware = None
 
 
 def create_app():
     app = Flask(__name__)
-    Swagger(app)
-    # Đăng ký blueprint trước
-    app.register_blueprint(todo_bp)
 
-     # Thêm Swagger UI blueprint
-    SWAGGER_URL = '/docs'
-    API_URL = '/swagger.json'
-    swaggerui_blueprint = get_swaggerui_blueprint(
-        SWAGGER_URL,
-        API_URL,
-        config={'app_name': "Todo API"}
-    )
-    app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
-
+    # init database
     init_db(app)
 
-    # Register middleware
-    middleware(app)
+    # Swagger docs
+    Swagger(app, template=SwaggerConfig.template, config=SwaggerConfig.swagger_config)
 
-    # Register routes
-    # Example: app.add_url_rule('/example', view_func=example_view)
-    # Tự động quét tất cả các route đã đăng ký
-    with app.test_request_context():
-        for rule in app.url_map.iter_rules():
-            if rule.endpoint.startswith('todo.'):
-                view_func = app.view_functions[rule.endpoint]
-                print(f"Adding path: {rule.rule} -> {view_func}")
-                spec.path(view=view_func)
+    # register middleware nếu có
+    if middleware:
+        middleware(app)
 
-    @app.route("/swagger.json")
-    def swagger_json():
-        return jsonify(spec.to_dict())
+    # === Register blueprints ===
+    from src.api.controllers.user_controller import bp as user_bp
+    app.register_blueprint(user_bp, url_prefix="/users")
+
+    from src.api.controllers.product_controller import bp as product_bp
+    app.register_blueprint(product_bp, url_prefix="/products")
 
     return app
 
-if __name__ == '__main__':
-    app = create_app()
-    app.run(host='0.0.0.0', port=6868, debug=True)
+
+app = create_app()
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=6868, debug=True)

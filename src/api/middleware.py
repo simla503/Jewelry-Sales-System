@@ -1,36 +1,31 @@
-# Middleware functions for processing requests and responses
+import jwt
+from functools import wraps
+from flask import request, jsonify
+from src.config import Config
 
-from flask import  request, jsonify
 
-def log_request_info(app):
-    app.logger.debug('Headers: %s', request.headers)
-    app.logger.debug('Body: %s', request.get_data())
+def token_required(f):
+    """Middleware kiểm tra JWT token."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
 
-def handle_options_request():
-    return jsonify({'message': 'CORS preflight response'}), 200
+        # Lấy token từ header Authorization: Bearer <token>
+        if "Authorization" in request.headers:
+            auth_header = request.headers["Authorization"]
+            if auth_header.startswith("Bearer "):
+                token = auth_header.split(" ")[1]
 
-def error_handling_middleware(error):
-    response = jsonify({'error': str(error)})
-    response.status_code = 500
-    return response
+        if not token:
+            return jsonify({"message": "Token is missing!"}), 401
 
-def add_custom_headers(response):
-    response.headers['X-Custom-Header'] = 'Value'
-    return response
+        try:
+            data = jwt.decode(token, Config.JWT_SECRET_KEY, algorithms=["HS256"])
+            current_user_id = data["user_id"]
+        except Exception as e:
+            return jsonify({"message": "Token is invalid!", "error": str(e)}), 401
 
-def middleware(app):
-    @app.before_request
-    def before_request():
-        log_request_info(app)
+        # Truyền current_user_id xuống cho route
+        return f(current_user_id, *args, **kwargs)
 
-    @app.after_request
-    def after_request(response):
-        return add_custom_headers(response)
-
-    @app.errorhandler(Exception)
-    def handle_exception(error):
-        return error_handling_middleware(error)
-
-    @app.route('/options', methods=['OPTIONS'])
-    def options_route():
-        return handle_options_request()
+    return decorated
